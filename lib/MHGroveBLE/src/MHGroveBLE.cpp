@@ -38,6 +38,7 @@ How utterly stupid! But that's the way it is.
 static const unsigned long kDefaultTimeout = 500;
 static const unsigned long kRetryTimeout = 500;
 static const unsigned long kWaitForDeviceTimeout = 5000;
+static const unsigned long kConnectedReadTimeout = 50;
 
 /** Internal state. */
 enum class MHGroveBLE::InternalState {
@@ -118,6 +119,7 @@ void MHGroveBLE::runOnce()
       break;
 
     case InternalState::connected:
+      handleConnected();
       break;
 
     case InternalState::panicked:
@@ -143,6 +145,12 @@ void MHGroveBLE::setOnConnect(void (*onFunc)())
 void MHGroveBLE::setOnDisconnect(void (*onFunc)())
 {
   onDisconnect = onFunc;
+}
+
+void MHGroveBLE::setOnDataReceived(void (*onFunc)(const String &))
+{
+  onDataReceived = onFunc;
+
 }
 
 void MHGroveBLE::setDebug(void (*debugFunc)(const char *))
@@ -250,6 +258,9 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
       break;
 
     case InternalState::waitingForConnection:
+      if (internalState == InternalState::connected && onDisconnect) {
+        onDisconnect();
+      }
       rxBuffer = "";
       break;
 
@@ -257,6 +268,8 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
       if (onConnect) {
         onConnect();
       }
+      retryTime = 0;
+      timeoutTime = 0;
       break;
 
     case InternalState::panicked:
@@ -367,12 +380,66 @@ void MHGroveBLE::handleWaitForConnect()
   }
 
   if (rxBuffer.indexOf("OK+CONN") != -1) {
+    rxBuffer = "";
     // Once we've received this string immediately transition to the "connected"
     // state. There's no point in waiting for a timeout like when we're waiting
     // for AT command responses.
     // The point of doing this with `indexOf` is to recover if we have received
     // garbage before.
     transitionToState(InternalState::connected);
+  }
+}
+
+void MHGroveBLE::handleConnected()
+{
+  unsigned long now = millis();
+  bool connectionClosed = false;
+  bool dataWasRead = readIntoBuffer();
+
+  // TODO: We need to handle timeout overflows (in fact, we need that everywhere
+  //  we deal with timeouts).
+
+  if (!dataWasRead && (timeoutTime == 0 || now < timeoutTime)) {
+    // Nothing happened, no need to react yet.
+    return;
+  }
+
+  if (dataWasRead) {
+    // Every time we read data we need to reset our timeout to avoid
+    // timing out in the middle of a stream.
+    timeoutTime = now + kConnectedReadTimeout;
+  }
+
+  // Pass the data to the handler if either the timeout occurred or if the
+  // receive buffer is full. The later is necessary to not lose any data.
+  if (now >= timeoutTime || rxBuffer.length() == rxBufferSize) {
+    // The Grove BLE sends "OK+LOST" when the connection is closed.
+    // Unfortunately, an app is also able to send this string and we don't know
+    // whether the Grove BLE or the app has sent it.
+    // This is why `handleWaitForConnect` also needs to be able to handle
+    // garbage: it's possible that an app sends "OK+LOST" and once the
+    // connection is really closed, another "OK+LOST" is sent by Grove BLE
+    // before the "OK+CONN" for a new connection arrives.
+    int index = rxBuffer.indexOf("OK+LOST");
+    // Check whether it's the last thing in the buffer to avoid reacting on the
+    // string being part of some other text.
+    if (index >= 0 && ((unsigned)index+7 == rxBuffer.length())) {
+      connectionClosed = true;
+      // Remove the sentinel.
+      rxBuffer.remove(index);
+    }
+
+    // Pass the data to the handler...
+    if (onDataReceived && rxBuffer.length() > 0) {
+      onDataReceived(rxBuffer);
+    }
+    // ... and clear it.
+    rxBuffer = "";
+    timeoutTime = 0;
+  }
+
+  if (connectionClosed) {
+    transitionToState(InternalState::waitingForConnection);
   }
 }
 

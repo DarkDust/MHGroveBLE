@@ -22,6 +22,14 @@ void setup()
   ble.setOnConnect([]() {
     Serial.println("Connected.");
   });
+  ble.setOnDisconnect([]() {
+    Serial.println("Disconnected.");
+  });
+  ble.setOnDataReceived([](const String & data) {
+    Serial.print("Data received from app: ");
+    Serial.print(data);
+    Serial.println();
+  });
 }
 
 void loop()

@@ -72,13 +72,17 @@ public:
    */
   State getState();
 
-  /** Handler that's called when a connection to a peer has been established.
+  /** Handler: a connection to a peer has been established.
    */
   void setOnConnect(void (*) ());
 
-  /** Handler that's called when a connection to a peer has been closed.
+  /** Handler: a connection to a peer has been closed.
    */
   void setOnDisconnect(void (*) ());
+
+  /** Handler: data has been received from peer.
+   */
+  void setOnDataReceived(void (*) (const String & data));
 
   /** Optional debugging function or lambda.
    */
@@ -112,6 +116,8 @@ private:
   void (*onConnect) ();
   /** Handler for closed connection. */
   void (*onDisconnect) ();
+  /** Handler for received data. */
+  void (*onDataReceived) (const String & data);
   /** Optional debugging function or lambda. */
   void (*debug) (const char * text);
 
@@ -134,6 +140,7 @@ private:
   void handleGenericCommand();
   void handleReset();
   void handleWaitForConnect();
+  void handleConnected();
   void panic();
 };
 
