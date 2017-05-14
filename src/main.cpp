@@ -29,6 +29,10 @@ void setup()
     digitalWrite(LED_PIN, HIGH);
     isReady = true;
   });
+  ble.setOnPanic([]() {
+    digitalWrite(LED_PIN, LOW);
+    isReady = true;
+  });
   ble.setOnConnect([]() {
     Serial.println(F("Connected."));
   });

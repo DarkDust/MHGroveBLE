@@ -158,6 +158,11 @@ void MHGroveBLE::setOnReady(void (*onFunc)())
   onReady = onFunc;
 }
 
+void MHGroveBLE::setOnPanic(void (*onFunc)())
+{
+  onPanic = onFunc;
+}
+
 void MHGroveBLE::setOnConnect(void (*onFunc)())
 {
   onConnect = onFunc;
@@ -186,6 +191,7 @@ bool MHGroveBLE::send(const String & data)
   }
 
   device.print(data);
+  return true;
 }
 
 
@@ -339,6 +345,9 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
     case InternalState::panicked:
       if (debug) {
         debug("Panic!");
+      }
+      if (onPanic) {
+        onPanic();
       }
       break;
   }

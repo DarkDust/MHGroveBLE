@@ -77,6 +77,10 @@ public:
    */
   void setOnReady(void (*) ());
 
+  /** Handler: an unrecoverable error occurred. The receiver has shut down.
+   */
+  void setOnPanic(void (*) ());
+
   /** Handler: a connection to a peer has been established.
    */
   void setOnConnect(void (*) ());
@@ -128,6 +132,8 @@ private:
   unsigned long timeoutDuration;
   /** Handler for completed initialization. */
   void (*onReady) ();
+  /** Handler for panic shutdown. */
+  void (*onPanic) ();
   /** Handler for established connection. */
   void (*onConnect) ();
   /** Handler for closed connection. */
