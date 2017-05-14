@@ -167,16 +167,15 @@ void MHGroveBLE::setDebug(void (*debugFunc)(const char *))
   debug = debugFunc;
 }
 
-void MHGroveBLE::sendCommand(const char * command)
+void MHGroveBLE::sendCommand(const String & command)
 {
   if (debug) {
-    String text = "Sending command: ";
+    String text = F("Sending command: ");
     text += command;
     debug(text.c_str());
   }
 
   device.print(command);
-  // device.print("\r\n");
 
   // Clear the receive buffer after sending a command.
   rxBuffer = "";
@@ -197,7 +196,7 @@ MHGroveBLE::ResponseState MHGroveBLE::receiveResponse()
     if (rxBuffer.length() > 0) {
       // We reached a timeout and have data! We're done.
       if (debug) {
-        String text = "Received response: ";
+        String text = F("Received response: ");
         text += rxBuffer;
         debug(text.c_str());
       }
@@ -225,7 +224,7 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
   unsigned long now = millis();
 
   if (debug) {
-    String text = "Transitioning to state: ";
+    String text = F("Transitioning to state: ");
     text += (int)nextState;
     debug(text.c_str());
   }
@@ -234,7 +233,7 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
     case InternalState::startup: break;
 
     case InternalState::waitForDeviceAfterStartup:
-      sendCommand("AT");
+      sendCommand(F("AT"));
       retryReferenceTime = now;
       retryDuration = kRetryTimeout;
       timeoutReferenceTime = now;
@@ -242,9 +241,9 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
       break;
 
     case InternalState::setName: {
-      String command = "AT+NAME";
+      String command = F("AT+NAME");
       command += name;
-      sendCommand(command.c_str());
+      sendCommand(command);
       retryReferenceTime = 0;
       retryDuration = 0;
       timeoutReferenceTime = now;
@@ -254,7 +253,7 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
     }
 
     case InternalState::setRole:
-      sendCommand("AT+ROLE0");
+      sendCommand(F("AT+ROLE0"));
       retryReferenceTime = 0;
       retryDuration = 0;
       timeoutReferenceTime = now;
@@ -263,7 +262,7 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
       break;
 
     case InternalState::setNotification:
-      sendCommand("AT+NOTI1");
+      sendCommand(F("AT+NOTI1"));
       retryReferenceTime = 0;
       retryDuration = 0;
       timeoutReferenceTime = now;
@@ -272,7 +271,7 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
       break;
 
     case InternalState::reset:
-      sendCommand("AT+RESET");
+      sendCommand(F("AT+RESET"));
       retryReferenceTime = 0;
       retryDuration = 0;
       timeoutReferenceTime = now;
@@ -280,7 +279,7 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
       break;
 
     case InternalState::waitForDeviceAfterReset:
-      sendCommand("AT");
+      sendCommand(F("AT"));
       retryReferenceTime = now;
       retryDuration = kRetryTimeout;
       timeoutReferenceTime = now;
@@ -345,7 +344,7 @@ void MHGroveBLE::handleWaitForDevice()
       break;
 
     case ResponseState::needRetry:
-      sendCommand("AT");
+      sendCommand(F("AT"));
       break;
 
     case ResponseState::timedOut:
@@ -412,7 +411,7 @@ void MHGroveBLE::handleWaitForConnect()
     return;
   }
 
-  if (rxBuffer.indexOf("OK+CONN") != -1) {
+  if (rxBuffer.indexOf(F("OK+CONN")) != -1) {
     rxBuffer = "";
     // Once we've received this string immediately transition to the "connected"
     // state. There's no point in waiting for a timeout like when we're waiting
@@ -455,7 +454,7 @@ void MHGroveBLE::handleConnected()
     // garbage: it's possible that an app sends "OK+LOST" and once the
     // connection is really closed, another "OK+LOST" is sent by Grove BLE
     // before the "OK+CONN" for a new connection arrives.
-    int index = rxBuffer.indexOf("OK+LOST");
+    int index = rxBuffer.lastIndexOf(F("OK+LOST"));
     // Check whether it's the last thing in the buffer to avoid reacting on the
     // string being part of some other text.
     if (index >= 0 && ((unsigned)index+7 == rxBuffer.length())) {

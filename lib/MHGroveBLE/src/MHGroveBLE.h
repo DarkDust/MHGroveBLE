@@ -124,7 +124,7 @@ private:
   void (*debug) (const char * text);
 
   /** Send a string to the device. */
-  void sendCommand(const char * command);
+  void sendCommand(const String & command);
 
   /** Receive a response from the device. */
   ResponseState receiveResponse();
