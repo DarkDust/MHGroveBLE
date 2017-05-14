@@ -106,12 +106,14 @@ private:
   InternalState internalState;
   /** For `handleGenericCommand`: the next state to transition to. */
   InternalState genericNextInternalState;
-  /** The time at which the current operation should retry, if applicable. */
-  unsigned long retryTime;
-  /** The time at which the current operation should time out and panic state
-   should be entered.
-   */
-  unsigned long timeoutTime;
+  /** Reference time for retry timeout. */
+  unsigned long retryReferenceTime;
+  /** Duration of the retry timeout. */
+  unsigned long retryDuration;
+  /** Reference time for time at which the current operation should time out. */
+  unsigned long timeoutReferenceTime;
+  /** Reference time for time at which the current operation should time out. */
+  unsigned long timeoutDuration;
   /** Handler for established connection. */
   void (*onConnect) ();
   /** Handler for closed connection. */
@@ -131,7 +133,7 @@ private:
   void transitionToState(InternalState nextState);
 
   /** Read data from the device into the receive buffer.
-  
+
    @return Whether data was read.
    */
   bool readIntoBuffer();

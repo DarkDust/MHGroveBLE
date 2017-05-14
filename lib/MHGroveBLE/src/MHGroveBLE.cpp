@@ -78,6 +78,15 @@ enum class MHGroveBLE::ResponseState {
   success
 };
 
+/** Internal helper: calculate whether a timeout occurred.
+
+ Handles `millies()` overflow.
+ */
+static bool isTimeout(unsigned long now, unsigned long referenceTime, unsigned long duration)
+{
+  return (now - referenceTime) >= duration;
+}
+
 
 MHGroveBLE::MHGroveBLE(
   Stream & device,
@@ -176,12 +185,17 @@ void MHGroveBLE::sendCommand(const char * command)
 MHGroveBLE::ResponseState MHGroveBLE::receiveResponse()
 {
   unsigned long now = millis();
-  bool timeoutReached = (now >= timeoutTime);
+  bool timeoutReached = isTimeout(now, timeoutReferenceTime, timeoutDuration);
+  bool retryReached =
+    retryDuration > 0
+    ? isTimeout(now, retryReferenceTime, retryDuration)
+    : false;
 
   readIntoBuffer();
 
-  if ((retryTime > 0 && now >= retryTime) || timeoutReached) {
+  if (retryReached || timeoutReached) {
     if (rxBuffer.length() > 0) {
+      // We reached a timeout and have data! We're done.
       if (debug) {
         String text = "Received response: ";
         text += rxBuffer;
@@ -190,14 +204,18 @@ MHGroveBLE::ResponseState MHGroveBLE::receiveResponse()
       return ResponseState::success;
 
     } else if (timeoutReached) {
+      // The hard timeout has been reached.
       return ResponseState::timedOut;
 
     } else {
-      retryTime = millis() + kRetryTimeout;
+      // The retry timeout (soft timeout) has been reached. Reset the reference
+      // time to start the next retry phase.
+      retryReferenceTime = now;
       return ResponseState::needRetry;
     }
 
   } else {
+    // No timeout reached yet, keep on reading.
     return ResponseState::receiving;
   }
 }
@@ -217,44 +235,56 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
 
     case InternalState::waitForDeviceAfterStartup:
       sendCommand("AT");
-      retryTime = now + kRetryTimeout;
-      timeoutTime = now + kWaitForDeviceTimeout;
+      retryReferenceTime = now;
+      retryDuration = kRetryTimeout;
+      timeoutReferenceTime = now;
+      timeoutDuration = kWaitForDeviceTimeout;
       break;
 
     case InternalState::setName: {
       String command = "AT+NAME";
       command += name;
       sendCommand(command.c_str());
-      retryTime = 0;
-      timeoutTime = now + kDefaultTimeout;
+      retryReferenceTime = 0;
+      retryDuration = 0;
+      timeoutReferenceTime = now;
+      timeoutDuration = kDefaultTimeout;
       genericNextInternalState = InternalState::setRole;
       break;
     }
 
     case InternalState::setRole:
       sendCommand("AT+ROLE0");
-      retryTime = 0;
-      timeoutTime = now + kDefaultTimeout;
+      retryReferenceTime = 0;
+      retryDuration = 0;
+      timeoutReferenceTime = now;
+      timeoutDuration = kDefaultTimeout;
       genericNextInternalState = InternalState::setNotification;
       break;
 
     case InternalState::setNotification:
       sendCommand("AT+NOTI1");
-      retryTime = 0;
-      timeoutTime = now + kDefaultTimeout;
+      retryReferenceTime = 0;
+      retryDuration = 0;
+      timeoutReferenceTime = now;
+      timeoutDuration = kDefaultTimeout;
       genericNextInternalState = InternalState::reset;
       break;
 
     case InternalState::reset:
       sendCommand("AT+RESET");
-      retryTime = 0;
-      timeoutTime = now + kDefaultTimeout;
+      retryReferenceTime = 0;
+      retryDuration = 0;
+      timeoutReferenceTime = now;
+      timeoutDuration = kDefaultTimeout;
       break;
 
     case InternalState::waitForDeviceAfterReset:
       sendCommand("AT");
-      retryTime = now + kRetryTimeout;
-      timeoutTime = now + kWaitForDeviceTimeout;
+      retryReferenceTime = now;
+      retryDuration = kRetryTimeout;
+      timeoutReferenceTime = now;
+      timeoutDuration = kWaitForDeviceTimeout;
       break;
 
     case InternalState::waitingForConnection:
@@ -262,14 +292,17 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
         onDisconnect();
       }
       rxBuffer = "";
+      // No timeout handling in this state.
       break;
 
     case InternalState::connected:
       if (onConnect) {
         onConnect();
       }
-      retryTime = 0;
-      timeoutTime = 0;
+      retryReferenceTime = 0;
+      retryDuration = 0;
+      timeoutReferenceTime = 0;
+      timeoutDuration = 0;
       break;
 
     case InternalState::panicked:
@@ -395,11 +428,12 @@ void MHGroveBLE::handleConnected()
   unsigned long now = millis();
   bool connectionClosed = false;
   bool dataWasRead = readIntoBuffer();
+  bool timeoutReached =
+    timeoutDuration > 0
+    ? isTimeout(now, timeoutReferenceTime, timeoutDuration)
+    : false;
 
-  // TODO: We need to handle timeout overflows (in fact, we need that everywhere
-  //  we deal with timeouts).
-
-  if (!dataWasRead && (timeoutTime == 0 || now < timeoutTime)) {
+  if (!dataWasRead && !timeoutReached) {
     // Nothing happened, no need to react yet.
     return;
   }
@@ -407,12 +441,13 @@ void MHGroveBLE::handleConnected()
   if (dataWasRead) {
     // Every time we read data we need to reset our timeout to avoid
     // timing out in the middle of a stream.
-    timeoutTime = now + kConnectedReadTimeout;
+    timeoutReferenceTime = now;
+    timeoutDuration = kConnectedReadTimeout;
   }
 
   // Pass the data to the handler if either the timeout occurred or if the
   // receive buffer is full. The later is necessary to not lose any data.
-  if (now >= timeoutTime || rxBuffer.length() == rxBufferSize) {
+  if (timeoutReached || rxBuffer.length() == rxBufferSize) {
     // The Grove BLE sends "OK+LOST" when the connection is closed.
     // Unfortunately, an app is also able to send this string and we don't know
     // whether the Grove BLE or the app has sent it.
@@ -435,7 +470,8 @@ void MHGroveBLE::handleConnected()
     }
     // ... and clear it.
     rxBuffer = "";
-    timeoutTime = 0;
+    timeoutReferenceTime = 0;
+    timeoutDuration = 0;
   }
 
   if (connectionClosed) {
