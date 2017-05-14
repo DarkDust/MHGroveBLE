@@ -72,6 +72,11 @@ public:
    */
   State getState();
 
+  /** Handler: initialization has completed and the receiver is now waiting for
+   connections.
+   */
+  void setOnReady(void (*) ());
+
   /** Handler: a connection to a peer has been established.
    */
   void setOnConnect(void (*) ());
@@ -87,6 +92,13 @@ public:
   /** Optional debugging function or lambda.
    */
   void setDebug(void (*) (const char * text));
+
+  /** Send data to the peer.
+
+   @param data The data to send.
+   @return Whether the data was sent.
+   */
+  bool send(const String & data);
 
 private:
   /** Internal state that should not be exposed. */
@@ -114,6 +126,8 @@ private:
   unsigned long timeoutReferenceTime;
   /** Reference time for time at which the current operation should time out. */
   unsigned long timeoutDuration;
+  /** Handler for completed initialization. */
+  void (*onReady) ();
   /** Handler for established connection. */
   void (*onConnect) ();
   /** Handler for closed connection. */

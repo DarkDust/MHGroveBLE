@@ -56,14 +56,16 @@ enum class MHGroveBLE::InternalState {
   reset,
   /** Send "AT" periodically and wait until the device responds. */
   waitForDeviceAfterReset,
-
-  /** An unrecoverable error occurred, operation is halted. */
-  panicked,
+  /** Initialization is done, inform the handler. */
+  initializationComplete,
 
   /** Waiting for a connection. */
   waitingForConnection,
   /** A peer has connected. */
-  connected
+  connected,
+
+  /** An unrecoverable error occurred, operation is halted. */
+  panicked
 };
 
 /** Return value for `receiveResponse`. */
@@ -123,6 +125,11 @@ void MHGroveBLE::runOnce()
       handleReset();
       break;
 
+    case InternalState::initializationComplete:
+      // It should not be possible to end up here since we immediately
+      // transition to the `waitingForConnection` state.
+      break;
+
     case InternalState::waitingForConnection:
       handleWaitForConnect();
       break;
@@ -146,6 +153,11 @@ MHGroveBLE::State MHGroveBLE::getState() {
   }
 }
 
+void MHGroveBLE::setOnReady(void (*onFunc)())
+{
+  onReady = onFunc;
+}
+
 void MHGroveBLE::setOnConnect(void (*onFunc)())
 {
   onConnect = onFunc;
@@ -166,6 +178,20 @@ void MHGroveBLE::setDebug(void (*debugFunc)(const char *))
 {
   debug = debugFunc;
 }
+
+bool MHGroveBLE::send(const String & data)
+{
+  if (internalState != InternalState::connected) {
+    return false;
+  }
+
+  device.print(data);
+}
+
+
+/*******************************************************************************
+ * Private section
+ ******************************************************************************/
 
 void MHGroveBLE::sendCommand(const String & command)
 {
@@ -286,6 +312,12 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
       timeoutDuration = kWaitForDeviceTimeout;
       break;
 
+    case InternalState::initializationComplete:
+      if (onReady) {
+        onReady();
+      }
+      break;
+
     case InternalState::waitingForConnection:
       if (internalState == InternalState::connected && onDisconnect) {
         onDisconnect();
@@ -312,6 +344,13 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
   }
 
   internalState = nextState;
+
+  if (nextState == InternalState::initializationComplete) {
+    // When we've reached the `initializationComplete` state, we want to inform
+    // the handler (done above) and then continue to the `waitingForConnection`
+    // state right away.
+    transitionToState(InternalState::waitingForConnection);
+  }
 }
 
 bool MHGroveBLE::readIntoBuffer()
@@ -358,7 +397,7 @@ void MHGroveBLE::handleWaitForDevice()
           break;
 
         case InternalState::waitForDeviceAfterReset:
-          transitionToState(InternalState::waitingForConnection);
+          transitionToState(InternalState::initializationComplete);
           break;
 
         default:
