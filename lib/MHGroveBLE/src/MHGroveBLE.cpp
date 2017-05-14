@@ -36,7 +36,8 @@ How utterly stupid! But that's the way it is.
 */
 
 static const unsigned long kGenericCommandTimeout = 1000;
-static const unsigned long kRetryTimeout = 500;
+static const unsigned long kReceiveResponseEarlyTimeout = 50;
+static const unsigned long kWaitForDeviceRetryTimeout = 500;
 static const unsigned long kWaitForDeviceTimeout = 5000;
 static const unsigned long kConnectedReadTimeout = 50;
 
@@ -218,11 +219,16 @@ MHGroveBLE::ResponseState MHGroveBLE::receiveResponse()
   unsigned long now = millis();
   bool timeoutReached = isTimeout(now, timeoutReferenceTime, timeoutDuration);
   bool retryReached =
-    retryDuration > 0
-    ? isTimeout(now, retryReferenceTime, retryDuration)
+    softTimeoutDuration > 0
+    ? isTimeout(now, softTimeoutReferenceTime, softTimeoutDuration)
     : false;
 
-  readIntoBuffer();
+  if (readIntoBuffer()) {
+    // We've read response data! We don't need to wait for the complete timeout
+    // now, it's enough to wait until the response text is likely complete.
+    softTimeoutReferenceTime = now;
+    softTimeoutDuration = kReceiveResponseEarlyTimeout;
+  }
 
   if (retryReached || timeoutReached) {
     if (rxBuffer.length() > 0) {
@@ -241,7 +247,7 @@ MHGroveBLE::ResponseState MHGroveBLE::receiveResponse()
     } else {
       // The retry timeout (soft timeout) has been reached. Reset the reference
       // time to start the next retry phase.
-      retryReferenceTime = now;
+      softTimeoutReferenceTime = now;
       return ResponseState::needRetry;
     }
 
@@ -266,16 +272,16 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
 
     case InternalState::waitForDeviceAfterStartup:
       sendCommand(F("AT"));
-      retryReferenceTime = now;
-      retryDuration = kRetryTimeout;
+      softTimeoutReferenceTime = now;
+      softTimeoutDuration = kWaitForDeviceRetryTimeout;
       timeoutReferenceTime = now;
       timeoutDuration = kWaitForDeviceTimeout;
       break;
 
     case InternalState::renew:
       sendCommand(F("AT+RENEW"));
-      retryReferenceTime = 0;
-      retryDuration = 0;
+      softTimeoutReferenceTime = 0;
+      softTimeoutDuration = 0;
       timeoutReferenceTime = now;
       timeoutDuration = kGenericCommandTimeout;
       genericNextInternalState = InternalState::setName;
@@ -285,8 +291,8 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
       String command = F("AT+NAME");
       command += name;
       sendCommand(command);
-      retryReferenceTime = 0;
-      retryDuration = 0;
+      softTimeoutReferenceTime = 0;
+      softTimeoutDuration = 0;
       timeoutReferenceTime = now;
       timeoutDuration = kGenericCommandTimeout;
       genericNextInternalState = InternalState::setNotification;
@@ -295,8 +301,8 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
 
     case InternalState::setNotification:
       sendCommand(F("AT+NOTI1"));
-      retryReferenceTime = 0;
-      retryDuration = 0;
+      softTimeoutReferenceTime = 0;
+      softTimeoutDuration = 0;
       timeoutReferenceTime = now;
       timeoutDuration = kGenericCommandTimeout;
       genericNextInternalState = InternalState::reset;
@@ -304,16 +310,16 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
 
     case InternalState::reset:
       sendCommand(F("AT+RESET"));
-      retryReferenceTime = 0;
-      retryDuration = 0;
+      softTimeoutReferenceTime = 0;
+      softTimeoutDuration = 0;
       timeoutReferenceTime = now;
       timeoutDuration = kGenericCommandTimeout;
       break;
 
     case InternalState::waitForDeviceAfterReset:
       sendCommand(F("AT"));
-      retryReferenceTime = now;
-      retryDuration = kRetryTimeout;
+      softTimeoutReferenceTime = now;
+      softTimeoutDuration = kWaitForDeviceRetryTimeout;
       timeoutReferenceTime = now;
       timeoutDuration = kWaitForDeviceTimeout;
       break;
@@ -336,8 +342,8 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
       if (onConnect) {
         onConnect();
       }
-      retryReferenceTime = 0;
-      retryDuration = 0;
+      softTimeoutReferenceTime = 0;
+      softTimeoutDuration = 0;
       timeoutReferenceTime = 0;
       timeoutDuration = 0;
       break;

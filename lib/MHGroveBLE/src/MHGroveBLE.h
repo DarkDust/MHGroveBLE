@@ -122,13 +122,13 @@ private:
   InternalState internalState;
   /** For `handleGenericCommand`: the next state to transition to. */
   InternalState genericNextInternalState;
-  /** Reference time for retry timeout. */
-  unsigned long retryReferenceTime;
-  /** Duration of the retry timeout. */
-  unsigned long retryDuration;
-  /** Reference time for time at which the current operation should time out. */
+  /** Reference time for the soft timeout. */
+  unsigned long softTimeoutReferenceTime;
+  /** Duration for the soft timeout. */
+  unsigned long softTimeoutDuration;
+  /** Reference time for the hard timeout. */
   unsigned long timeoutReferenceTime;
-  /** Reference time for time at which the current operation should time out. */
+  /** Duration for the hard timeout. */
   unsigned long timeoutDuration;
   /** Handler for completed initialization. */
   void (*onReady) ();
