@@ -35,7 +35,7 @@ a timeout.
 How utterly stupid! But that's the way it is.
 */
 
-static const unsigned long kDefaultTimeout = 500;
+static const unsigned long kGenericCommandTimeout = 1000;
 static const unsigned long kRetryTimeout = 500;
 static const unsigned long kWaitForDeviceTimeout = 5000;
 static const unsigned long kConnectedReadTimeout = 50;
@@ -46,10 +46,10 @@ enum class MHGroveBLE::InternalState {
   startup,
   /** Send "AT" periodically and wait until the device responds. */
   waitForDeviceAfterStartup,
+  /** Reset all settings to their factory defaults. */
+  renew,
   /** Set the Bluetooth name. */
   setName,
-  /** Set the device role. */
-  setRole,
   /** Set that we want to be notified about connections. */
   setNotification,
   /** Reset after setting the device up. */
@@ -115,8 +115,8 @@ void MHGroveBLE::runOnce()
       handleWaitForDevice();
       break;
 
+    case InternalState::renew:
     case InternalState::setName:
-    case InternalState::setRole:
     case InternalState::setNotification:
       handleGenericCommand();
       break;
@@ -272,6 +272,15 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
       timeoutDuration = kWaitForDeviceTimeout;
       break;
 
+    case InternalState::renew:
+      sendCommand(F("AT+RENEW"));
+      retryReferenceTime = 0;
+      retryDuration = 0;
+      timeoutReferenceTime = now;
+      timeoutDuration = kGenericCommandTimeout;
+      genericNextInternalState = InternalState::setName;
+      break;
+
     case InternalState::setName: {
       String command = F("AT+NAME");
       command += name;
@@ -279,26 +288,17 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
       retryReferenceTime = 0;
       retryDuration = 0;
       timeoutReferenceTime = now;
-      timeoutDuration = kDefaultTimeout;
-      genericNextInternalState = InternalState::setRole;
-      break;
-    }
-
-    case InternalState::setRole:
-      sendCommand(F("AT+ROLE0"));
-      retryReferenceTime = 0;
-      retryDuration = 0;
-      timeoutReferenceTime = now;
-      timeoutDuration = kDefaultTimeout;
+      timeoutDuration = kGenericCommandTimeout;
       genericNextInternalState = InternalState::setNotification;
       break;
+    }
 
     case InternalState::setNotification:
       sendCommand(F("AT+NOTI1"));
       retryReferenceTime = 0;
       retryDuration = 0;
       timeoutReferenceTime = now;
-      timeoutDuration = kDefaultTimeout;
+      timeoutDuration = kGenericCommandTimeout;
       genericNextInternalState = InternalState::reset;
       break;
 
@@ -307,7 +307,7 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
       retryReferenceTime = 0;
       retryDuration = 0;
       timeoutReferenceTime = now;
-      timeoutDuration = kDefaultTimeout;
+      timeoutDuration = kGenericCommandTimeout;
       break;
 
     case InternalState::waitForDeviceAfterReset:
@@ -402,7 +402,7 @@ void MHGroveBLE::handleWaitForDevice()
     case ResponseState::success:
       switch (internalState) {
         case InternalState::waitForDeviceAfterStartup:
-          transitionToState(InternalState::setName);
+          transitionToState(InternalState::renew);
           break;
 
         case InternalState::waitForDeviceAfterReset:
