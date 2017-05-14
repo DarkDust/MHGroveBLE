@@ -43,6 +43,8 @@ void setup()
     Serial.print(F("Data received from app: "));
     Serial.print(data);
     Serial.println();
+
+    ble.send(data);
   });
 }
 

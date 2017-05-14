@@ -35,10 +35,17 @@ a timeout.
 How utterly stupid! But that's the way it is.
 */
 
+/** Hard timeout for generic command responses. */
 static const unsigned long kGenericCommandTimeout = 1000;
+/** Soft timeout for early completion of response handling. */
 static const unsigned long kReceiveResponseEarlyTimeout = 50;
-static const unsigned long kWaitForDeviceRetryTimeout = 500;
+/** Hard timeout for the "wait for device" handling. */
 static const unsigned long kWaitForDeviceTimeout = 5000;
+/** Soft timeout for the "wait for device" handling: once this timeout is
+ reached, resend the "AT" command.
+ */
+static const unsigned long kWaitForDeviceRetryTimeout = 500;
+/** Timeout for reads while in the connected state. */
 static const unsigned long kConnectedReadTimeout = 50;
 
 /** Internal state. */
