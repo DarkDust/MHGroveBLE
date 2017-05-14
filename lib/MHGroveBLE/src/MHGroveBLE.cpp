@@ -85,6 +85,7 @@ MHGroveBLE::MHGroveBLE(
 ) :
   device(device),
   name(name),
+  rxBufferSize(rxBufferSize),
   internalState(InternalState::startup)
 {
   rxBuffer.reserve(rxBufferSize);
@@ -113,6 +114,7 @@ void MHGroveBLE::runOnce()
       break;
 
     case InternalState::waitingForConnection:
+      handleWaitForConnect();
       break;
 
     case InternalState::connected:
@@ -131,6 +133,16 @@ MHGroveBLE::State MHGroveBLE::getState() {
     case InternalState::connected:  return State::connected;
     default:                        return State::initializing;
   }
+}
+
+void MHGroveBLE::setOnConnect(void (*onFunc)())
+{
+  onConnect = onFunc;
+}
+
+void MHGroveBLE::setOnDisconnect(void (*onFunc)())
+{
+  onDisconnect = onFunc;
 }
 
 void MHGroveBLE::setDebug(void (*debugFunc)(const char *))
@@ -158,14 +170,7 @@ MHGroveBLE::ResponseState MHGroveBLE::receiveResponse()
   unsigned long now = millis();
   bool timeoutReached = (now >= timeoutTime);
 
-  while (device.available() > 0) {
-    int value = device.read();
-    if (value < 0) {
-      // Shouldn't happen? We asked whether there's stuff available!
-      break;
-    }
-    rxBuffer += (char)value;
-  }
+  readIntoBuffer();
 
   if ((retryTime > 0 && now >= retryTime) || timeoutReached) {
     if (rxBuffer.length() > 0) {
@@ -245,9 +250,13 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
       break;
 
     case InternalState::waitingForConnection:
+      rxBuffer = "";
       break;
 
     case InternalState::connected:
+      if (onConnect) {
+        onConnect();
+      }
       break;
 
     case InternalState::panicked:
@@ -258,6 +267,29 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
   }
 
   internalState = nextState;
+}
+
+bool MHGroveBLE::readIntoBuffer()
+{
+  bool didReceive = false;
+
+  while (device.available() > 0) {
+    int value = device.read();
+    if (value < 0) {
+      // Shouldn't happen? We asked whether there's stuff available!
+      break;
+    }
+
+    if (rxBuffer.length() == rxBufferSize) {
+      // We don't want to grow the receive buffer. Discard old data.
+      rxBuffer.remove(0, 1);
+    }
+
+    rxBuffer += (char)value;
+    didReceive = true;
+  }
+
+  return didReceive;
 }
 
 void MHGroveBLE::handleWaitForDevice()
@@ -325,6 +357,22 @@ void MHGroveBLE::handleReset()
     case ResponseState::success:
       transitionToState(InternalState::waitForDeviceAfterReset);
       break;
+  }
+}
+
+void MHGroveBLE::handleWaitForConnect()
+{
+  if (!readIntoBuffer()) {
+    return;
+  }
+
+  if (rxBuffer.indexOf("OK+CONN") != -1) {
+    // Once we've received this string immediately transition to the "connected"
+    // state. There's no point in waiting for a timeout like when we're waiting
+    // for AT command responses.
+    // The point of doing this with `indexOf` is to recover if we have received
+    // garbage before.
+    transitionToState(InternalState::connected);
   }
 }
 

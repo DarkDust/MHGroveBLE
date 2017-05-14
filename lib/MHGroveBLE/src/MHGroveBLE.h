@@ -72,6 +72,14 @@ public:
    */
   State getState();
 
+  /** Handler that's called when a connection to a peer has been established.
+   */
+  void setOnConnect(void (*) ());
+
+  /** Handler that's called when a connection to a peer has been closed.
+   */
+  void setOnDisconnect(void (*) ());
+
   /** Optional debugging function or lambda.
    */
   void setDebug(void (*) (const char * text));
@@ -88,6 +96,8 @@ private:
   const char * name;
   /** Receive buffer. */
   String rxBuffer;
+  /** Size of the receive buffer. */
+  unsigned int rxBufferSize;
   /** The current internal state. */
   InternalState internalState;
   /** For `handleGenericCommand`: the next state to transition to. */
@@ -98,8 +108,11 @@ private:
    should be entered.
    */
   unsigned long timeoutTime;
-  /** Optional debugging function or lambda.
-   */
+  /** Handler for established connection. */
+  void (*onConnect) ();
+  /** Handler for closed connection. */
+  void (*onDisconnect) ();
+  /** Optional debugging function or lambda. */
   void (*debug) (const char * text);
 
   /** Send a string to the device. */
@@ -111,9 +124,16 @@ private:
   /** Go from one state to the next one and trigger the required action. */
   void transitionToState(InternalState nextState);
 
+  /** Read data from the device into the receive buffer.
+  
+   @return Whether data was read.
+   */
+  bool readIntoBuffer();
+
   void handleWaitForDevice();
   void handleGenericCommand();
   void handleReset();
+  void handleWaitForConnect();
   void panic();
 };
 

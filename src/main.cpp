@@ -18,6 +18,10 @@ void setup()
   ble.setDebug([](const char * text) {
     Serial.println(text);
   });
+
+  ble.setOnConnect([]() {
+    Serial.println("Connected.");
+  });
 }
 
 void loop()
