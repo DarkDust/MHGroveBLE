@@ -79,6 +79,13 @@ public:
    */
   bool send(const String & data);
 
+  /** Set the Bluetooth PIN.
+
+   This must be a string with six digits, from "000000" to "999999".
+   If you want to set the PIN, call this function before calling `runOnce()`.
+   */
+  void setPIN(const char * pin);
+
   /** Handler: initialization has completed and the receiver is now waiting for
    connections.
    */
@@ -116,6 +123,8 @@ private:
   long firmwareVersion;
   /** Name of the Bluetooth device. */
   const char * name;
+  /** Bluetooth pin as a string. */
+  const char * pin;
   /** Receive buffer. */
   String rxBuffer;
   /** Size of the receive buffer. */

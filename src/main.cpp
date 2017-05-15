@@ -22,6 +22,7 @@ void setup()
   bleStream.begin(9600);
   bleStream.listen();
 
+  ble.setPIN("123456");
   ble.setDebug([](const char * text) {
     Serial.println(text);
   });

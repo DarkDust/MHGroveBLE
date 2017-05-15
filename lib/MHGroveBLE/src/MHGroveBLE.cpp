@@ -35,6 +35,14 @@ a timeout.
 How utterly stupid! But that's the way it is.
 */
 
+/*
+Currently only support HM-11 devices.
+
+Commands to implement:
+- AT+UUID0x1234 : Set service UUID
+- AT+CHAR0x1234 : Characteristic
+*/
+
 /** Hard timeout for generic command responses. */
 static const unsigned long kGenericCommandTimeout = 1000;
 /** Soft timeout for early completion of response handling. */
@@ -66,6 +74,10 @@ enum class MHGroveBLE::InternalState {
   getFirmwareVersion,
   /** Set the Bluetooth name. */
   setName,
+  /** Set the Bluetooth pin. */
+  setPIN,
+  /** Set authentication to needing a PIN (if PIN is set). */
+  setPINAuth,
   /** Set that we want to be notified about connections. */
   setNotification,
   /** Reset after setting the device up. */
@@ -139,6 +151,8 @@ void MHGroveBLE::runOnce()
 
     case InternalState::renew:
     case InternalState::setName:
+    case InternalState::setPIN:
+    case InternalState::setPINAuth:
     case InternalState::setNotification:
       handleGenericCommand();
       break;
@@ -177,6 +191,11 @@ MHGroveBLE::State MHGroveBLE::getState() {
     case InternalState::connected:  return State::connected;
     default:                        return State::initializing;
   }
+}
+
+void MHGroveBLE::setPIN(const char * aPin)
+{
+  pin = aPin;
 }
 
 void MHGroveBLE::setOnReady(void (*onFunc)())
@@ -276,9 +295,31 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
       String command = F("AT+NAME");
       command += name;
       sendCommand(command);
-      genericNextInternalState = InternalState::setNotification;
+      genericNextInternalState = InternalState::setPIN;
       break;
     }
+
+    case InternalState::setPIN:
+      if (pin) {
+        String command = F("AT+PASS");
+        command += pin;
+        sendCommand(command);
+        genericNextInternalState = InternalState::setPINAuth;
+      } else {
+        skipToState = InternalState::setNotification;
+      }
+      break;
+
+    case InternalState::setPINAuth:
+      // The documentation explicitly says not to issue this command if the
+      // firmwareVersion is less than 515.
+      if (pin && firmwareVersion >= 515) {
+        sendCommand(F("AT+TYPE2")); // Auth with PIN
+        genericNextInternalState = InternalState::setNotification;
+      } else {
+        skipToState = InternalState::setNotification;
+      }
+      break;
 
     case InternalState::setNotification:
       sendCommand(F("AT+NOTI1"));
