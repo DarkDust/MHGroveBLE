@@ -72,6 +72,13 @@ public:
    */
   State getState();
 
+  /** Send data to the peer.
+
+   @param data The data to send.
+   @return Whether the data was sent.
+   */
+  bool send(const String & data);
+
   /** Handler: initialization has completed and the receiver is now waiting for
    connections.
    */
@@ -97,13 +104,6 @@ public:
    */
   void setDebug(void (*) (const char * text));
 
-  /** Send data to the peer.
-
-   @param data The data to send.
-   @return Whether the data was sent.
-   */
-  bool send(const String & data);
-
 private:
   /** Internal state that should not be exposed. */
   enum class InternalState;
@@ -112,6 +112,8 @@ private:
 
   /** Serial port object for communicating with Grove BLE. */
   Stream & device;
+  /** Version of the Grove BLE firmware. */
+  long firmwareVersion;
   /** Name of the Bluetooth device. */
   const char * name;
   /** Receive buffer. */
@@ -160,6 +162,7 @@ private:
 
   void handleWaitForDevice();
   void handleGenericCommand();
+  void handleGetFirmwareVersion();
   void handleReset();
   void handleWaitForConnect();
   void handleConnected();

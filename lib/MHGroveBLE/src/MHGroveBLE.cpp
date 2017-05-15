@@ -56,6 +56,14 @@ enum class MHGroveBLE::InternalState {
   waitForDeviceAfterStartup,
   /** Reset all settings to their factory defaults. */
   renew,
+  /** After "renew" was sent, we need to give the device half a second to apply
+   the factory defaults. If we don't wait after "renew", the communication may
+   break down unexpectedly (i.e. the device suddenly doesn't send a response to
+   a query).
+   */
+  waitAfterRenew,
+  /** Get the firmware version. */
+  getFirmwareVersion,
   /** Set the Bluetooth name. */
   setName,
   /** Set that we want to be notified about connections. */
@@ -123,10 +131,20 @@ void MHGroveBLE::runOnce()
       handleWaitForDevice();
       break;
 
+    case InternalState::waitAfterRenew:
+      if (isTimeout(millis(), timeoutReferenceTime, timeoutDuration)) {
+        transitionToState(InternalState::getFirmwareVersion);
+      }
+      break;
+
     case InternalState::renew:
     case InternalState::setName:
     case InternalState::setNotification:
       handleGenericCommand();
+      break;
+
+    case InternalState::getFirmwareVersion:
+      handleGetFirmwareVersion();
       break;
 
     case InternalState::reset:
@@ -207,66 +225,10 @@ bool MHGroveBLE::send(const String & data)
  * Private section
  ******************************************************************************/
 
-void MHGroveBLE::sendCommand(const String & command)
-{
-  if (debug) {
-    String text = F("Sending command: ");
-    text += command;
-    debug(text.c_str());
-  }
-
-  device.print(command);
-
-  // Clear the receive buffer after sending a command.
-  rxBuffer = "";
-}
-
-MHGroveBLE::ResponseState MHGroveBLE::receiveResponse()
-{
-  unsigned long now = millis();
-  bool timeoutReached = isTimeout(now, timeoutReferenceTime, timeoutDuration);
-  bool retryReached =
-    softTimeoutDuration > 0
-    ? isTimeout(now, softTimeoutReferenceTime, softTimeoutDuration)
-    : false;
-
-  if (readIntoBuffer()) {
-    // We've read response data! We don't need to wait for the complete timeout
-    // now, it's enough to wait until the response text is likely complete.
-    softTimeoutReferenceTime = now;
-    softTimeoutDuration = kReceiveResponseEarlyTimeout;
-  }
-
-  if (retryReached || timeoutReached) {
-    if (rxBuffer.length() > 0) {
-      // We reached a timeout and have data! We're done.
-      if (debug) {
-        String text = F("Received response: ");
-        text += rxBuffer;
-        debug(text.c_str());
-      }
-      return ResponseState::success;
-
-    } else if (timeoutReached) {
-      // The hard timeout has been reached.
-      return ResponseState::timedOut;
-
-    } else {
-      // The retry timeout (soft timeout) has been reached. Reset the reference
-      // time to start the next retry phase.
-      softTimeoutReferenceTime = now;
-      return ResponseState::needRetry;
-    }
-
-  } else {
-    // No timeout reached yet, keep on reading.
-    return ResponseState::receiving;
-  }
-}
-
 void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
 {
   unsigned long now = millis();
+  InternalState skipToState = nextState;
 
   if (debug) {
     String text = F("Transitioning to state: ");
@@ -274,23 +236,39 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
     debug(text.c_str());
   }
 
+  // Set most commonly needed values.
+  softTimeoutReferenceTime = 0;
+  softTimeoutDuration = 0;
+  timeoutReferenceTime = now;
+  timeoutDuration = kGenericCommandTimeout;
+
   switch (nextState) {
-    case InternalState::startup: break;
+    case InternalState::startup:
+      break;
 
     case InternalState::waitForDeviceAfterStartup:
       sendCommand(F("AT"));
       softTimeoutReferenceTime = now;
       softTimeoutDuration = kWaitForDeviceRetryTimeout;
-      timeoutReferenceTime = now;
       timeoutDuration = kWaitForDeviceTimeout;
       break;
 
     case InternalState::renew:
       sendCommand(F("AT+RENEW"));
-      softTimeoutReferenceTime = 0;
-      softTimeoutDuration = 0;
-      timeoutReferenceTime = now;
-      timeoutDuration = kGenericCommandTimeout;
+      genericNextInternalState = InternalState::waitAfterRenew;
+      break;
+
+    case InternalState::waitAfterRenew:
+      // Documentation says that we should wait for 500ms after "AT+RENEW",
+      // but that's too short: communication wasn't stable with this delay.
+      // Even 600ms didn't work, while 750ms did work. Let's stay on the safe
+      // side and grant the device a full second.
+      timeoutDuration = 1000;
+      // The transition to the next state is handled in `runOnce()`.
+      break;
+
+    case InternalState::getFirmwareVersion:
+      sendCommand(F("AT+VERS?"));
       genericNextInternalState = InternalState::setName;
       break;
 
@@ -298,29 +276,17 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
       String command = F("AT+NAME");
       command += name;
       sendCommand(command);
-      softTimeoutReferenceTime = 0;
-      softTimeoutDuration = 0;
-      timeoutReferenceTime = now;
-      timeoutDuration = kGenericCommandTimeout;
       genericNextInternalState = InternalState::setNotification;
       break;
     }
 
     case InternalState::setNotification:
       sendCommand(F("AT+NOTI1"));
-      softTimeoutReferenceTime = 0;
-      softTimeoutDuration = 0;
-      timeoutReferenceTime = now;
-      timeoutDuration = kGenericCommandTimeout;
       genericNextInternalState = InternalState::reset;
       break;
 
     case InternalState::reset:
       sendCommand(F("AT+RESET"));
-      softTimeoutReferenceTime = 0;
-      softTimeoutDuration = 0;
-      timeoutReferenceTime = now;
-      timeoutDuration = kGenericCommandTimeout;
       break;
 
     case InternalState::waitForDeviceAfterReset:
@@ -332,9 +298,13 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
       break;
 
     case InternalState::initializationComplete:
+      // When we've reached the `initializationComplete` state, we just want to
+      // inform the handler and then continue to the `waitingForConnection`
+      // state right away.
       if (onReady) {
         onReady();
       }
+      skipToState = InternalState::waitingForConnection;
       break;
 
     case InternalState::waitingForConnection:
@@ -342,15 +312,12 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
         onDisconnect();
       }
       rxBuffer = "";
-      // No timeout handling in this state.
       break;
 
     case InternalState::connected:
       if (onConnect) {
         onConnect();
       }
-      softTimeoutReferenceTime = 0;
-      softTimeoutDuration = 0;
       timeoutReferenceTime = 0;
       timeoutDuration = 0;
       break;
@@ -367,12 +334,23 @@ void MHGroveBLE::transitionToState(MHGroveBLE::InternalState nextState)
 
   internalState = nextState;
 
-  if (nextState == InternalState::initializationComplete) {
-    // When we've reached the `initializationComplete` state, we want to inform
-    // the handler (done above) and then continue to the `waitingForConnection`
-    // state right away.
-    transitionToState(InternalState::waitingForConnection);
+  if (skipToState != nextState) {
+    transitionToState(skipToState);
   }
+}
+
+void MHGroveBLE::sendCommand(const String & command)
+{
+  if (debug) {
+    String text = F("Sending command: ");
+    text += command;
+    debug(text.c_str());
+  }
+
+  device.print(command);
+
+  // Clear the receive buffer after sending a command.
+  rxBuffer = "";
 }
 
 bool MHGroveBLE::readIntoBuffer()
@@ -396,6 +374,50 @@ bool MHGroveBLE::readIntoBuffer()
   }
 
   return didReceive;
+}
+
+MHGroveBLE::ResponseState MHGroveBLE::receiveResponse()
+{
+  unsigned long now = millis();
+
+  bool timeoutReached = isTimeout(now, timeoutReferenceTime, timeoutDuration);
+  bool softTimeoutReached =
+    softTimeoutDuration > 0
+    ? isTimeout(now, softTimeoutReferenceTime, softTimeoutDuration)
+    : false;
+
+  if (readIntoBuffer()) {
+    // We've read response data! We don't need to wait for the complete timeout
+    // now, it's enough to wait until the response text is likely complete.
+    softTimeoutReferenceTime = now;
+    softTimeoutDuration = kReceiveResponseEarlyTimeout;
+  }
+
+  if (softTimeoutReached || timeoutReached) {
+    if (rxBuffer.length() > 0) {
+      // We reached a timeout and have data! We're done.
+      if (debug) {
+        String text = F("Received response: ");
+        text += rxBuffer;
+        debug(text.c_str());
+      }
+      return ResponseState::success;
+
+    } else if (timeoutReached) {
+      // The hard timeout has been reached.
+      return ResponseState::timedOut;
+
+    } else {
+      // The retry timeout (soft timeout) has been reached without any data.
+      // Reset the reference time to start the next retry phase.
+      softTimeoutReferenceTime = now;
+      return ResponseState::needRetry;
+    }
+
+  } else {
+    // No timeout reached yet, keep on reading.
+    return ResponseState::receiving;
+  }
 }
 
 void MHGroveBLE::handleWaitForDevice()
@@ -442,6 +464,34 @@ void MHGroveBLE::handleGenericCommand()
       break;
 
     case ResponseState::success:
+      transitionToState(genericNextInternalState);
+      break;
+  }
+}
+
+void MHGroveBLE::handleGetFirmwareVersion()
+{
+  switch (receiveResponse()) {
+    case ResponseState::receiving:
+      break;
+
+    case ResponseState::needRetry: // Bug, must not happen
+    case ResponseState::timedOut:
+      panic();
+      break;
+
+    case ResponseState::success:
+      // We expect a string like "HMSoft V540".
+      if (rxBuffer.startsWith(F("HMSoft V"))) {
+        rxBuffer.remove(0, 8);
+        firmwareVersion = rxBuffer.toInt();
+        if (debug) {
+          String text = F("Detected firmware version: ");
+          text += firmwareVersion;
+          debug(text.c_str());
+        }
+      }
+
       transitionToState(genericNextInternalState);
       break;
   }
