@@ -41,7 +41,7 @@ void setup()
     Serial.println(F("Disconnected."));
   });
   ble.setOnDataReceived([](const String & data) {
-    Serial.print(F("Data received from app: "));
+    Serial.print(F("Data received from peer: "));
     Serial.print(data);
     Serial.println();
 

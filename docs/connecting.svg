@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 400 140" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:1.5;">
+    <g id="Ebene1">
+        <g transform="matrix(1.30435,0,0,0.592583,-33.4783,-16.1475)">
+            <rect x="41" y="61" width="92" height="169" style="fill:rgb(235,235,235);stroke:black;stroke-width:0.99px;"/>
+        </g>
+        <g transform="matrix(1,0,0,1,-0.318685,-15.5537)">
+            <text x="117.917px" y="79.849px" style="font-family:'ArialMT', 'Arial', sans-serif;font-size:12px;">RX</text>
+        </g>
+        <g transform="matrix(1,0,0,1,-7.10543e-15,-16.3024)">
+            <text x="118.934px" y="60.597px" style="font-family:'ArialMT', 'Arial', sans-serif;font-size:12px;">TX</text>
+        </g>
+        <g transform="matrix(1,0,0,0.417277,-1.42109e-14,3.30892)">
+            <rect x="260" y="40" width="120" height="240" style="fill:rgb(235,235,235);stroke:black;stroke-width:1.31px;"/>
+        </g>
+        <g transform="matrix(1,0,0,1,-4.16732,-17.0837)">
+            <text x="268.91px" y="81.379px" style="font-family:'ArialMT', 'Arial', sans-serif;font-size:12px;">TX</text>
+        </g>
+        <g transform="matrix(1,0,0,1,-7.10543e-15,-20)">
+            <path d="M140,60.597L260,60.597" style="fill:none;stroke:black;stroke-width:1px;"/>
+        </g>
+        <g transform="matrix(1,0,0,1,-4.53971,-15.0947)">
+            <text x="268.62px" y="59.39px" style="font-family:'ArialMT', 'Arial', sans-serif;font-size:12px;">RX</text>
+        </g>
+        <g transform="matrix(1,0,0,1,-39.1589,-55.3747)">
+            <text x="321.31px" y="139.67px" style="font-family:'Arial-BoldMT', 'Arial', sans-serif;font-weight:700;font-size:12px;">Arduino/MCU</text>
+        </g>
+        <g transform="matrix(1,0,0,1,0.721029,-42.9854)">
+            <text x="48.283px" y="127.28px" style="font-family:'Arial-BoldMT', 'Arial', sans-serif;font-weight:700;font-size:12px;">Grove BLE</text>
+        </g>
+        <g transform="matrix(1,0,0,1,-7.10543e-15,-20)">
+            <path d="M140,80L260,80" style="fill:none;stroke:black;stroke-width:1px;"/>
+        </g>
+    </g>
+</svg>

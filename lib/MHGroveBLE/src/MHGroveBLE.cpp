@@ -35,14 +35,6 @@ a timeout.
 How utterly stupid! But that's the way it is.
 */
 
-/*
-Currently only support HM-11 devices.
-
-Commands to implement:
-- AT+UUID0x1234 : Set service UUID
-- AT+CHAR0x1234 : Characteristic
-*/
-
 /** Hard timeout for generic command responses. */
 static const unsigned long kGenericCommandTimeout = 1000;
 /** Soft timeout for early completion of response handling. */
