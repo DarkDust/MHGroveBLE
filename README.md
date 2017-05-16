@@ -26,7 +26,7 @@ lib_deps =
 
 ## Hardware
 
-![Diagram showing how to connect the Grove BLE module to your board](docs/connecting.svg?raw=true)
+![Diagram showing how to connect the Grove BLE module to your board](https://rawgit.com/DarkDust/MHGroveBLE/master/docs/connecting.svg)
 
 Connect the Grove BLE's RX and TX pins to your board's/MCU's pins that you want
 to use for receiving/sending. And of course connect the Grove BLE's V<sub>CC</sub>
