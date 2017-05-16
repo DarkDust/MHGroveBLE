@@ -8,12 +8,25 @@ is *not* yet supported.
 
 ## Installation
 
-(Instructions for Arduino and PlatformIO coming soon.)
+### Arduino IDE/Library Manager
 
+* Open _Sketch > Include Library > Manage Libraries_ in the Arduino IDE.
+* Search for "MHGroveBLE" and click on the entry.
+* Click the _"Install"_ button to install the libary.
+
+
+### PlatformIO
+
+* Open your project's `platformio.ini`.
+* Add `MHGroveBLE` to the `lib_deps` entry:
+```
+lib_deps =
+    MHGroveBLE
+```
 
 ## Hardware
 
-![Diagram showing how to connect the Grove BLE module to your board](docs/connecting.svg)
+![Diagram showing how to connect the Grove BLE module to your board](docs/connecting.svg?raw=true)
 
 Connect the Grove BLE's RX and TX pins to your board's/MCU's pins that you want
 to use for receiving/sending. And of course connect the Grove BLE's V<sub>CC</sub>
