@@ -3,7 +3,7 @@
 This project provides an easy-to-use class to interface with
 [Seeed Grove BLE v1](http://wiki.seeed.cc/Grove-BLE_v1/) modules. The
 [Seeed Grove BLE (dual model) v1.0](http://wiki.seeed.cc/Grove-BLE-dual_model-v1.0/)
-is *not* yet supported.
+is **not** yet supported.
 
 
 ## Installation
